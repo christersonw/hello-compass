@@ -1,102 +1,84 @@
 package com.example.alexander.mycompassmamn01;
 
 import android.app.Activity;
-import android.content.Context;
-import android.content.Intent;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.View;
-import android.widget.SimpleCursorAdapter;
-import android.widget.TextView;
+import android.view.animation.Animation;
+import android.view.animation.RotateAnimation;
+import android.widget.ImageView;
 
+public class CompassActivity extends Activity implements SensorEventListener {
 
-public class CompassActivity extends Activity implements SensorEventListener{
-Float azimut; // View to draw a compass
-
-    public class CustomDrawableView extends View{
-        Paint paint = new Paint();
-
-        public CustomDrawableView(Context context) {
-            super(context);
-            paint.setColor(0xff00ff00);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(2);
-            paint.setAntiAlias(true);
-        }
-        protected void onDraw(Canvas canvas){
-            int width = getWidth();
-            int height = getHeight();
-            int centerx = width/2;
-            int centery = height/2;
-            canvas.drawLine(centerx, 0, centerx, height,paint);
-            canvas.drawLine(0, centery, width, centery, paint);
-            //Rotate the canvas with the azimut
-            if (azimut != null)
-                canvas.rotate(-azimut*360/(2*3.14159f), centerx, centery);
-            paint.setColor(0xff0000ff);
-            canvas.drawLine(centerx, -1000, centerx, +1000, paint);
-            canvas.drawLine(-1000, centery, 1000, centery, paint);
-            canvas.drawText("N", centerx+5, centery-10,paint);
-            canvas.drawText("S", centerx-10, centery+15, paint);
-            paint.setColor(0xff00ff00);
-        }
-    }
-
-    CustomDrawableView mCustomDrawableView;
+    private ImageView mCompass;
     private SensorManager mSensorManager;
-    Sensor accelerometer;
-    Sensor magnetometer;
+    private Sensor mAccelerometer;
+    private Sensor mMagnetometer;
+    private float[] mLastAccelerometer = new float[3];
+    private float[] mLastMagnetometer = new float[3];
+    private boolean mLastAccelerometerSet = false;
+    private boolean mLastMagnetometerSet = false;
+    private float[] mR = new float[9];
+    private float[] mOrientation = new float[3];
+    private float mCurrentDegree = 0f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mCustomDrawableView = new CustomDrawableView(this);
-        setContentView(mCustomDrawableView); // Register the sensor listeners
-        mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-        accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        magnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        setContentView(R.layout.activity_start_compass);
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mMagnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        mCompass = (ImageView) findViewById(R.id.pointer);
     }
 
-    protected void onResume(){
+    protected void onResume() {
         super.onResume();
-        mSensorManager.registerListener(this,accelerometer, SensorManager.SENSOR_DELAY_UI);
-        mSensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI);
+        mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME);
+        mSensorManager.registerListener(this, mMagnetometer, SensorManager.SENSOR_DELAY_GAME);
     }
 
-    protected void onPause(){
+    protected void onPause() {
         super.onPause();
-        mSensorManager.unregisterListener(this);
+        mSensorManager.unregisterListener(this, mAccelerometer);
+        mSensorManager.unregisterListener(this, mMagnetometer);
     }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor == mAccelerometer) {
+            System.arraycopy(event.values, 0, mLastAccelerometer, 0, event.values.length);
+            mLastAccelerometerSet = true;
+        } else if (event.sensor == mMagnetometer) {
+            System.arraycopy(event.values, 0, mLastMagnetometer, 0, event.values.length);
+            mLastMagnetometerSet = true;
+        }
+        if (mLastAccelerometerSet && mLastMagnetometerSet) {
+            SensorManager.getRotationMatrix(mR, null, mLastAccelerometer, mLastMagnetometer);
+            SensorManager.getOrientation(mR, mOrientation);
+            float azimuthInRadians = mOrientation[0];
+            float azimuthInDegress = (float) (Math.toDegrees(azimuthInRadians) + 360) % 360;
+            RotateAnimation ra = new RotateAnimation(
+                    mCurrentDegree,
+                    -azimuthInDegress,
+                    Animation.RELATIVE_TO_SELF, 0.5f,
+                    Animation.RELATIVE_TO_SELF,
+                    0.5f);
+
+            ra.setDuration(250);
+
+            ra.setFillAfter(true);
+
+            mCompass.startAnimation(ra);
+            mCurrentDegree = -azimuthInDegress;
+        }
+    }
+
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // TODO Auto-generated method stub
 
-    }
-
-    float[] mGravity;
-    float[] mGeomagnetic;
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
-            mGravity = event.values;
-        if (event.sensor.getType()== Sensor.TYPE_MAGNETIC_FIELD)
-            mGeomagnetic = event.values;
-        if (mGravity != null && mGeomagnetic != null){
-            float R[] = new float[9];
-            float I[] = new float[9];
-            boolean success = SensorManager.getRotationMatrix(R,I,mGravity,mGeomagnetic);
-            if (success){
-                float orientation[] = new float[3];
-                SensorManager.getOrientation(R,orientation);
-                azimut = orientation[0]; //Orientation contains: azimut, pitch and roll
-            }
-        }
-        mCustomDrawableView.invalidate();
     }
 }
