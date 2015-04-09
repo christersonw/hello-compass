@@ -39,7 +39,7 @@ public final static String EXTRA_MESSAGE = "com.example.alexander.mycompassmamn0
 
         return super.onOptionsItemSelected(item);
     }
-    /** Called when the user clicks the Send button */
+    /** Called when the user clicks the compass image */
     public void startCompass(View view) {
        Intent intent = new Intent(this, CompassActivity.class);
         startActivity(intent);
